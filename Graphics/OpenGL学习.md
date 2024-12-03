@@ -62,6 +62,70 @@ OpenGL提供的函数接口的设计思路是面向过程的，基于C的。
 
 
 
+
+
+#### OpenGL上下文
+
+OpenGL上下文存储于OpenGL实例关联的所有状态，每组上下文都有自己的一组OpenGL对象，这些对象独立于其它上下文对象，也可以进行共享。
+
+容器对象、查询对象不可共享。
+
+当前上下文是线程局部的。
+
+
+
+#### OpenGL同步
+
+##### 显式同步
+
+OpenGL提供两种简单的同步机制：`glFlush`和`glFinish`。
+
+`glFinish`不会返回，停止当前CPU线程，直到所有渲染命令完成。
+
+`giFlush`停止当前CPU线程直到所有命令都添加到GPU的命令队列中。
+
+##### 隐式同步
+
+某些操作隐式强制glFinish同步，
+
+
+
+#### FBO帧缓冲对象
+
+帧缓冲是一些二维数组和OpenGL所使用的存储区的集合，包括颜色缓冲、深度缓冲、累计缓冲等。一般情况下，帧缓冲完全由Windows系统生成管理，由OpenGL使用。
+
+在OpenGL扩展中，提供了一种创建额外的不能显示的帧缓存对象的接口，与系统生成的有所区别，是转为应用程序的帧缓冲。
+
+通过FBO，OpenGL可以将显示输出到引用程序帧缓存对象，该缓冲由OpenGL控制。
+
+一个FBO包含存储颜色、深度、模板数据的区域。
+
+##### 纹理图像和渲染缓存图像
+
+帧缓存关联的两种图像
+
+如果纹理对象的图像数据关联到帧缓存，则OpenGL执行的是渲染到纹理的操作（render to texture）。
+
+如果渲染缓存的图像关联到帧缓存，OpenGL执行的是离线渲染（offscreen rendering）。
+
+
+
+一个帧缓存对象中由多个颜色关联点，一个深度关联点和一个模板关联点。
+
+FBO本身无任何图像存储区，只有关联点。
+
+FBO提供了高效的切换机制：将前面的帧缓存关联图像从FBO分离，然后把新的帧缓存关联图像关联到FBO。
+
+在帧缓存关联图像之间切换比在FBO之间切换要快。（~~所以它跟OpenGLManager是一个级别？~~ 跟VAO一个级别）
+
+
+
+渲染缓存是为了离屏渲染而引进的，允许将一个场景直接渲染到一个渲染缓存对象中，而不是直接渲染到纹理对象中。
+
+
+
+
+
 ## Qt中的OpenGL
 
 Qt中已封装的OpenGL方法能平替以下两个模块功能：
@@ -156,35 +220,31 @@ OpenGL核心是一个C库，支持多语言派生。
     
 * VBO、VAO和EBO
 
-    VBO存储实际数据。
+    VBO存储实际数据。VAO存储数据定义。EBO存储数据对象的索引。
 
-    VAO存储数据定义。
+    对于多点图的绘制，若有重复出现/使用的点，则可以考虑使用源+索引的方式进行数据取得。
 
-    * EBO存储数据对象的索引。
+    在VAO中绑定设置EBO，根据EBO中的索引从VBO中拿数据。
 
-        对于多点图的绘制，若有重复出现/使用的点，则可以考虑使用源+索引的方式进行数据取得。
-
-        在VAO中绑定设置EBO，根据EBO中的索引从VBO中拿数据。
-
-        ```c++
-        unsigned int EBO;
-        glGenBuffers(1,&EBO);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,EBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(indices),indices,GL_STATIC_DRAW);
-        /*
-        1. 创建EBO。
-        2. 绑定缓冲区：GL_ELEMENT_ARRAY_BUFFER
-        3. 向缓冲区传数据（索引信息）。		这时候VAO会同时进行记录
-        4. 索引信息和用索引取的这个方式记录在VAO中。
-        */
-        
-        glDrawElement(GL_TRIANGLES,6,GL_UNSIGNED_INT,0);
-        /*
-        从EBO中取索引，依照索引从相应的VBO中取6个数据，绘制成面。
-        若此时的VAO没绑定EBO，则最后一个参数填EBO的地址。
-        */
-        ```
-
+    ```c++
+    unsigned int EBO;
+    glGenBuffers(1,&EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(indices),indices,GL_STATIC_DRAW);
+    /*
+    1. 创建EBO。
+    2. 绑定缓冲区：GL_ELEMENT_ARRAY_BUFFER
+    3. 向缓冲区传数据（索引信息）。		这时候VAO会同时进行记录
+    4. 索引信息和用索引取的这个方式记录在VAO中。
+    */
+    
+    glDrawElement(GL_TRIANGLES,6,GL_UNSIGNED_INT,0);
+    /*
+    从EBO中取索引，依照索引从相应的VBO中取6个数据，绘制成面。
+    若此时的VAO没绑定EBO，则最后一个参数填EBO的地址。
+    */
+    ```
+    
 * 填充方式的选择：glPolygonMod
 
     ```c++
@@ -311,7 +371,70 @@ OpenGL核心是一个C库，支持多语言派生。
     
     ```
 
-    
+
+
+
+
+
+#### QSurfaceFormat
+
+表示QSurface的一种格式，包括颜色缓冲、深度缓冲、多重采样数量等。
+
+在使用OpenGL前，需要设置QSurfaceFormat，能设置的包括OpenGL版本、RGBA颜色分量、深度缓冲区和模板缓冲区位数、多重采样信息等。
+
+```cpp
+  int main(int argc, char **argv)
+  {
+      QApplication app(argc, argv);
+
+      QSurfaceFormat format;
+      format.setDepthBufferSize(24);
+      format.setStencilBufferSize(8);
+      format.setVersion(3, 2);
+      format.setProfile(QSurfaceFormat::CoreProfile);
+      QSurfaceFormat::setDefaultFormat(format);
+
+      MyWidget widget;
+      widget.show();
+
+      return app.exec();
+  }
+
+```
+
+也可以对Widget直接使用format
+
+```cpp
+QOpenGLWigdet * w = mew QOpenGLWidget;
+w->setFormat(format);
+```
+
+一旦OpenGL的渲染表面被创建，QSurfaceFormat就无法再次更改。
+
+（所以需要在渲染Surface创建完成之前设置好QSurfaceFormat）
+
+
+
+#### QSurface 
+
+用于显式三维曲面的一个基础类，包含在==Qt Data Visualization== 模块中，绘图原理是通过将三维数据点转换为平面上的二维数据点实现。
+
+QSurface会将三维曲面分割成一个个小块，每个小块有四个顶点构成，然后再将其进行拼接。
+
+在底层实现上，QSurface使用了OpneGL来进行曲面绘制。
+
+在使用 QSurface 绘制三维曲面时，需要提供一个数据源（QSurfaceDataArray、QSurfaceDataRow），用于存储曲面上的各个点的坐标值，再通过使用 QSurfaceDataProxy 对象将数据源中的数据传递给 QSurface3DSeries 对象进行绘制。
+
+相关类：QSurfaceDataRow  QSurfaceDataArray QSurface3DSeries QSurfaceDataProxy
+
+```cpp
+//一个示例
+ // https://gitee.com/strivezhangp/3d-surface-demo.git
+```
+
+
+
+
 
 ## 一个简单的应用-C++（1）
 
@@ -778,6 +901,5 @@ void MyOpenGLWidget::paintGL()
     }
 
 }
-
 ```
 
