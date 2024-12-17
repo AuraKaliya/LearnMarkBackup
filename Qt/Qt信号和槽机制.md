@@ -189,6 +189,65 @@ connect函数的**处理流程**：
 * 通过SIGNAL和SLOT宏预编译，真正传入的时字符串。
 * 处理时，先取出标识符进行对比**检查**（QSLOT_CODE 1    QSIGNAL_CODE 2）；然后获取信号发送者的元对象，提取信号名和参数类型，使用QArgnmentTypeArray容器存储（先创固定的栈内存数组，超过容量后进行动态存储的堆内存数组。）；对信号和槽函数进行检查；进行正式链接（（除开传入connect中的参数外）链接函数中还传入信号与槽函数的静态元对象，去除了const的限制。）--->对回调函数进行提取，正式绑定。
 
+
+
+## 批处理
+
+在Qt中，可使用`QMetaObject::connectSlotsByName`，通过对象名称`objectName`自动连接信号和槽。
+
+* 需要在响应类中定义规范的槽函数`on_<objectName>_<signalName>`。
+
+* 调用`QMetaObject::connectSlotsByName`关联对象节点（会搜寻以此节点为根的对象树下所有节点进行关联）。
+
+    ```cpp
+    #include <QApplication>
+    #include <QWidget>
+    #include <QPushButton>
+    #include <QVBoxLayout>
+    #include <QLabel>
+    #include <QMetaObject>
+    
+    class MyWidget : public QWidget {
+        Q_OBJECT
+    
+    public:
+        MyWidget(QWidget *parent = nullptr) : QWidget(parent) {
+            // 创建控件
+            QPushButton *button = new QPushButton("Click Me", this);
+            button->setObjectName("myButton"); // 设置对象名称
+    
+            label = new QLabel("Button not clicked", this);
+    
+            // 布局
+            QVBoxLayout *layout = new QVBoxLayout(this);
+            layout->addWidget(button);
+            layout->addWidget(label);
+            setLayout(layout);
+    
+            // 自动连接信号和槽
+            QMetaObject::connectSlotsByName(this);
+        }
+    
+    public slots:
+        // 槽函数，遵循命名约定
+        void on_myButton_clicked() {
+            label->setText("Button clicked!"); // 更新标签文本
+        }
+    
+    private:
+        QLabel *label; // 标签控件
+    };
+    
+    int main(int argc, char *argv[]) {
+        QApplication app(argc, argv);
+        MyWidget window;
+        window.show();
+        return app.exec();
+    }
+    
+    #include "main.moc"
+    ```
+
 ## 元对象
 
 * 元对象的创建方式：Q_OBJECT 宏展开创建，建立代码存在于moc中。

@@ -42,3 +42,10 @@
 在该类的上下文中创建的资源可与主OpenGL上下文共享，比如异步纹理渲染到`QOpenGLFramebufferObject`中。
 
 注意：该类的`create（）`只在主线程（GUI）中调用，即创建和销毁在GUI线程中执行。
+
+
+
+
+
+### QtConcurrent
+
